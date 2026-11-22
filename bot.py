@@ -53,6 +53,7 @@ class PageParser(HTMLParser):
         self.jsonld: list[Any] = []
         self._script_type = ""
         self._script_chunks: list[str] = []
+        self._in_script = False
         self._in_title = False
         self.title_chunks: list[str] = []
         self.text_chunks: list[str] = []
@@ -66,25 +67,29 @@ class PageParser(HTMLParser):
         elif tag == "script":
             self._script_type = a.get("type", "").lower()
             self._script_chunks = []
+            self._in_script = True
         elif tag == "title":
             self._in_title = True
 
     def handle_endtag(self, tag: str) -> None:
-        if tag == "script" and "ld+json" in self._script_type:
-            raw = "".join(self._script_chunks).strip()
-            if raw:
-                try:
-                    self.jsonld.append(json.loads(raw))
-                except json.JSONDecodeError:
-                    pass
+        if tag == "script":
+            if "ld+json" in self._script_type:
+                raw = "".join(self._script_chunks).strip()
+                if raw:
+                    try:
+                        self.jsonld.append(json.loads(raw))
+                    except json.JSONDecodeError:
+                        pass
             self._script_type = ""
             self._script_chunks = []
+            self._in_script = False
         elif tag == "title":
             self._in_title = False
 
     def handle_data(self, data: str) -> None:
-        if self._script_type:
-            self._script_chunks.append(data)
+        if self._in_script:
+            if "ld+json" in self._script_type:
+                self._script_chunks.append(data)
         else:
             clean = " ".join(data.split())
             if clean:
@@ -145,29 +150,51 @@ def inspect_page(source: dict[str, Any], timeout: int, max_price: float | None) 
     parser = PageParser()
     parser.feed(body)
     page_text = html.unescape(" ".join(parser.text_chunks))
-    lower_text = (page_text + " " + body[:200_000]).lower()
+    lower_text = page_text.lower()
     title = (parser.meta.get("og:title") or parser.meta.get("twitter:title") or " ".join(parser.title_chunks)).strip()
     product_text = (title + " " + source["url"]).lower()
     product_confirmed = any(k.lower() in product_text for k in source.get("product_keywords", ["ps5"]))
     if any(k.lower() in product_text for k in source.get("exclude_keywords", [])):
         return {"state": "excluded", "detail": "Produit reconditionné ou d’occasion"}
 
-    offers: list[dict[str, Any]] = []
+    product_nodes: list[dict[str, Any]] = []
     for root in parser.jsonld:
         for node in walk_json(root):
             types = node.get("@type", [])
             if isinstance(types, str):
                 types = [types]
             if any(t.lower() in ("product", "individualproduct", "productgroup") for t in types):
-                raw_offers = node.get("offers", [])
-                offers.extend(raw_offers if isinstance(raw_offers, list) else [raw_offers])
+                product_nodes.append(node)
+    match_terms = [x.lower() for x in source.get("product_match_keywords", [])]
+    matching_products = []
+    for node in product_nodes:
+        node_url = node.get("url") or node.get("@id") or ""
+        if isinstance(node_url, dict):
+            node_url = node_url.get("@id", "")
+        node_text = (str(node.get("name", "")) + " " + str(node_url)).lower()
+        if match_terms and any(term in node_text for term in match_terms):
+            matching_products.append(node)
+    # Never borrow stock from related-product cards. If the page has several
+    # products and the target cannot be identified, fall back to visible text.
+    if matching_products:
+        main_products = matching_products
+    elif len(product_nodes) == 1:
+        main_products = product_nodes
+    else:
+        main_products = []
+    offers: list[dict[str, Any]] = []
+    for node in main_products:
+        raw_offers = node.get("offers", [])
+        offers.extend(raw_offers if isinstance(raw_offers, list) else [raw_offers])
     availability_values: list[str] = []
     seller_text: list[str] = []
     prices: list[float] = []
     for offer in offers:
         if not isinstance(offer, dict):
             continue
-        availability_values.append(str(offer.get("availability", "")).lower())
+        availability = str(offer.get("availability", "")).strip().lower()
+        if availability:
+            availability_values.append(availability)
         seller = offer.get("seller") or offer.get("offeredBy") or ""
         seller_text.append(json.dumps(seller, ensure_ascii=False).lower() if isinstance(seller, (dict, list)) else str(seller).lower())
         p = price_number(offer.get("price") or offer.get("priceSpecification"))
@@ -175,14 +202,24 @@ def inspect_page(source: dict[str, Any], timeout: int, max_price: float | None) 
             prices.append(p)
 
     for key in ("product:availability", "availability", "og:availability", "itemprop=availability"):
-        if key in parser.meta:
-            availability_values.append(parser.meta[key].lower())
-    available = any(x.endswith(("instock", "limitedavailability", "onlineonly")) or "in stock" in x or "en stock" in x or "disponible" in x for x in availability_values)
-    unavailable = any(x.endswith(("outofstock", "soldout", "discontinued")) or "rupture" in x or "indisponible" in x for x in availability_values)
-    availability_signal = "données structurées" if availability_values else "texte de la page (signal moins fiable)"
-    if not availability_values:
-        available = bool(re.search(r"en stock|disponible immédiatement|ajouter au panier|add to cart", lower_text))
-        unavailable = bool(re.search(r"rupture de stock|indisponible|out of stock|épuisé", lower_text))
+        value = parser.meta.get(key, "").strip().lower()
+        if value:
+            availability_values.append(value)
+    structured_available = any(
+        x.rstrip("/").endswith(("instock", "limitedavailability", "onlineonly"))
+        or x.strip() in ("in stock", "en stock")
+        for x in availability_values
+    )
+    structured_unavailable = any(
+        x.rstrip("/").endswith(("outofstock", "soldout", "discontinued"))
+        or x.strip() in ("out of stock", "rupture de stock", "indisponible", "épuisé")
+        for x in availability_values
+    )
+    text_available = bool(re.search(r"\ben stock\b|disponible immédiatement|disponible en ligne|\bin stock\b|available now", lower_text))
+    text_unavailable = bool(re.search(r"rupture de stock|indisponible|\bout of stock\b|\bsold out\b|épuisé", lower_text))
+    available = structured_available or text_available
+    unavailable = structured_unavailable or text_unavailable
+    availability_signal = "données structurées" if structured_available else "texte visible explicite (moins fiable)"
 
     domain = (urllib.parse.urlparse(final_url).hostname or "").lower()
     allowed_domains = [d.lower().lstrip(".") for d in source.get("official_domains", [])]
@@ -200,7 +237,10 @@ def inspect_page(source: dict[str, Any], timeout: int, max_price: float | None) 
         )
     price = min(prices) if prices else None
 
-    if unavailable:
+    if available and unavailable:
+        state, detail = "unknown", "Indices de stock contradictoires ; vérifier la fiche"
+        certainty = {"product": product_confirmed, "seller": seller_ok, "price": price is not None, "within_limit": price is not None and (max_price is None or price <= max_price)}
+    elif unavailable:
         state, detail = "out_of_stock", "Indisponible"
         certainty = {"product": product_confirmed, "seller": seller_ok, "price": price is not None, "within_limit": price is not None and (max_price is None or price <= max_price)}
     elif available:
