@@ -1,0 +1,50 @@
+{
+  "poll_seconds": 300,
+  "request_timeout_seconds": 20,
+  "pause_between_sources_seconds": 8,
+  "max_price_eur": 700,
+  "sources": [
+    {
+      "id": "playstation-ps5-digital",
+      "name": "PlayStation Direct",
+      "url": "https://direct.playstation.com/fr-fr/buy-consoles/playstation5-digital-edition-console-825-gb",
+      "official_domains": ["direct.playstation.com"],
+      "seller_aliases": ["playstation", "sony interactive entertainment"],
+      "first_party": true,
+      "product_keywords": ["ps5", "playstation 5"],
+      "exclude_keywords": ["recondition", "refurbished", "occasion", "used"],
+      "enabled": true
+    },
+    {
+      "id": "fnac-ps5-slim-standard",
+      "name": "Fnac",
+      "url": "https://www.fnac.com/Console-Sony-PS5-Edition-Standard/a14119960/w-4",
+      "official_domains": ["fnac.com"],
+      "seller_aliases": ["fnac", "fnac.com"],
+      "product_keywords": ["ps5", "playstation 5"],
+      "exclude_keywords": ["recondition", "refurbished", "occasion", "used"],
+      "enabled": true
+    },
+    {
+      "id": "amazon-ps5-standard",
+      "name": "Amazon",
+      "url": "https://amzn.eu/d/01uBx6Gm",
+      "official_domains": ["amazon.fr"],
+      "seller_aliases": ["amazon", "playstation", "amazon.fr"],
+      "product_keywords": ["ps5", "playstation 5"],
+      "exclude_keywords": ["recondition", "refurbished", "occasion", "used"],
+      "enabled": true
+    },
+    {
+      "id": "micromania-ps5-slim-standard",
+      "name": "Micromania",
+      "url": "https://www.micromania.fr/p/playstation-5-modele-slim-edition-numerique-chassis-e-153689.html",
+      "official_domains": ["micromania.fr"],
+      "seller_aliases": ["micromania", "micromania.fr"],
+      "product_keywords": ["ps5", "playstation 5"],
+      "exclude_keywords": ["recondition", "refurbished", "occasion", "used"],
+      "enabled": true
+    }
+  ]
+}
+
