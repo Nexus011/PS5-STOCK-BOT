@@ -12,16 +12,7 @@
       "seller_aliases": ["playstation", "sony interactive entertainment"],
       "first_party": true,
       "product_keywords": ["ps5", "playstation 5"],
-      "exclude_keywords": ["recondition", "refurbished", "occasion", "used"],
-      "enabled": true
-    },
-    {
-      "id": "fnac-ps5-slim-standard",
-      "name": "Fnac",
-      "url": "https://www.fnac.com/Console-Sony-PS5-Edition-Standard/a14119960/w-4",
-      "official_domains": ["fnac.com"],
-      "seller_aliases": ["fnac", "fnac.com"],
-      "product_keywords": ["ps5", "playstation 5"],
+      "product_match_keywords": ["digital edition", "édition numérique", "825 go"],
       "exclude_keywords": ["recondition", "refurbished", "occasion", "used"],
       "enabled": true
     },
@@ -32,6 +23,7 @@
       "official_domains": ["amazon.fr"],
       "seller_aliases": ["amazon", "playstation", "amazon.fr"],
       "product_keywords": ["ps5", "playstation 5"],
+      "product_match_keywords": ["edition standard", "standard", "1 to"],
       "exclude_keywords": ["recondition", "refurbished", "occasion", "used"],
       "enabled": true
     },
@@ -42,6 +34,7 @@
       "official_domains": ["micromania.fr"],
       "seller_aliases": ["micromania", "micromania.fr"],
       "product_keywords": ["ps5", "playstation 5"],
+      "product_match_keywords": ["digital", "edition numérique", "standard", "slim", "1 to"],
       "exclude_keywords": ["recondition", "refurbished", "occasion", "used"],
       "enabled": true
     }
